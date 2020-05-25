@@ -31,16 +31,8 @@ fi
 
 # Build the runtime system and symbol table (.nm) file.
 #
-# (This C build has to come after the first genesis in order to get
-# the sbcl.h the C build needs, and come before the second genesis in
-# order to produce the symbol table file that second genesis needs. It
-# could come either before or after running the cross compiler; that
-# doesn't matter.)
-#
-# Note that the latter requirement does not apply to :linkage-table
-# builds, since the cross compiler does not depend on symbol tables in
-# that case.  Only because sbcl.nm is convenient for debugging purposes
-# is its generation left enabled even for those builds.
+# This C build has to come after the first genesis in order to get
+# the sbcl.h the C build needs.
 echo //building runtime system and symbol table file
 
 # The clean is needed for Darwin's readonlyspace hack.
@@ -48,15 +40,7 @@ $GNUMAKE -C src/runtime clean
 # $GNUMAKE -C src/runtime depend
 $GNUMAKE $SBCL_MAKE_JOBS -C src/runtime all
 
-# Use a little C program to grab stuff from the C header files and
-# smash it into Lisp source code.
-$GNUMAKE -C tools-for-build -I../src/runtime grovel-headers
-tools-for-build/grovel-headers > output/stuff-groveled-from-headers.lisp
-
-$GNUMAKE -C src/runtime after-grovel-headers
-
 if [ -n "$SBCL_HOST_LOCATION" ]; then
     echo //copying target-1 output files to host
     rsync -a src/runtime/sbcl.nm "$SBCL_HOST_LOCATION/src/runtime/"
-    rsync -a output/stuff-groveled-from-headers.lisp "$SBCL_HOST_LOCATION/output"
 fi
