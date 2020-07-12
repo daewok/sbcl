@@ -12,7 +12,9 @@
 
 CPPFLAGS+=-I../src/runtime
 LDFLAGS:=$(LDFLAGS)
-LDLIBS:=$(OS_LIBS)
+# Unconditionally include libdl to make sure we can robustly detect the libdl
+# related features.
+LDLIBS:= $(OS_LIBDL) $(OS_LIBS)
 
 all: grovel-headers determine-endianness where-is-mcontext mmap-rwx
 

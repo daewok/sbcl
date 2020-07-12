@@ -504,6 +504,17 @@ arch_write_linkage_table_entry(int index, void *target_addr, int datap)
     *(void**)(reloc_addr+8) = target_addr;
 }
 
+void
+*arch_read_linkage_table_entry(int index, int datap)
+{
+  char *reloc_addr = (char*)LINKAGE_TABLE_SPACE_START + index * LINKAGE_TABLE_ENTRY_SIZE;
+  if (datap) {
+    return (void*) *(uword_t *)reloc_addr;
+  }
+
+  return *(void**)(reloc_addr+8);
+}
+
 /* These setup and check *both* the sse2 and x87 FPUs. While lisp code
    only uses the sse2 FPU, other code (such as libc) may use the x87 FPU.
  */

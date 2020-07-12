@@ -16,7 +16,11 @@ ASSEM_SRC = mips-assem.S
 ARCH_SRC = mips-arch.c
 
 OS_SRC = linux-os.c linux-mman.c mips-linux-os.c
-OS_LIBS = -ldl -Wl,-no-as-needed
+
+OS_LIBDL = -ldl
+ifeq ($(or $(LISP_FEATURE_OS_PROVIDES_DLOPEN),$(LISP_FEATURE_OS_PROVIDES_DLADDR)),1)
+OS_LIBS = $(OS_LIBDL) -Wl,-no-as-needed
+endif
 
 ifdef LISP_FEATURE_LARGEFILE
   CFLAGS += -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64

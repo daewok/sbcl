@@ -14,7 +14,12 @@ NM = ./linux-nm
 ARCH_SRC = riscv-arch.c
 
 OS_SRC = linux-os.c linux-mman.c riscv-linux-os.c
-OS_LIBS = -ldl -Wl,-no-as-needed
+
+OS_LIBDL = -ldl
+ifeq ($(or $(LISP_FEATURE_OS_PROVIDES_DLOPEN),$(LISP_FEATURE_OS_PROVIDES_DLADDR)),1)
+OS_LIBS = $(OS_LIBDL) -Wl,-no-as-needed
+endif
+
 ifdef LISP_FEATURE_SB_THREAD
   OS_LIBS += -lpthread
 endif

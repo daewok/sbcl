@@ -13,7 +13,13 @@ ASSEM_SRC = x86-64-assem.S
 ARCH_SRC = x86-64-arch.c
 
 OS_SRC = sunos-os.c x86-64-sunos-os.c
-OS_LIBS= -ldl -lsocket -lnsl -lrt
+
+OS_LIBDL = -ldl
+ifeq ($(or $(LISP_FEATURE_OS_PROVIDES_DLOPEN),$(LISP_FEATURE_OS_PROVIDES_DLADDR)),1)
+OS_LIBS = $(OS_LIBDL)
+endif
+
+OS_LIBS += -lsocket -lnsl -lrt
 ifdef LISP_FEATURE_SB_CORE_COMPRESSION
   OS_LIBS += -lz
 endif

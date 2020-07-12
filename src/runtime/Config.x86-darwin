@@ -27,7 +27,13 @@ endif
 
 OS_SRC = bsd-os.c x86-bsd-os.c darwin-os.c x86-darwin-os.c
 
-OS_LIBS = -lSystem -lc -ldl
+OS_LIBS = -lSystem -lc
+
+OS_LIBDL = -ldl
+ifeq ($(or $(LISP_FEATURE_OS_PROVIDES_DLOPEN),$(LISP_FEATURE_OS_PROVIDES_DLADDR)),1)
+OS_LIBS += $(OS_LIBDL)
+endif
+
 ifdef LISP_FEATURE_SB_THREAD
   OS_LIBS += -lpthread
 endif

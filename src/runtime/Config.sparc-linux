@@ -18,7 +18,12 @@ ASSEM_SRC = sparc-assem.S
 ARCH_SRC = sparc-arch.c
 
 OS_SRC = linux-os.c linux-mman.c sparc-linux-os.c
-OS_LIBS = -ldl
+
+OS_LIBDL = -ldl
+ifeq ($(or $(LISP_FEATURE_OS_PROVIDES_DLOPEN),$(LISP_FEATURE_OS_PROVIDES_DLADDR)),1)
+OS_LIBS = $(OS_LIBDL)
+endif
+
 ifdef LISP_FEATURE_SB_CORE_COMPRESSION
   OS_LIBS += -lz
 endif

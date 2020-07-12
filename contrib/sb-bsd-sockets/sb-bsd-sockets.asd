@@ -6,7 +6,7 @@
 ;;; 1003.1-2003 defines an alternative API, which is specified in the
 ;;; RFC to be thread-safe. If it seems to be available, use it.
 
-(when (sb-alien::find-dynamic-foreign-symbol-address "getaddrinfo")
+(when (sb-alien::find-foreign-symbol-address "getaddrinfo")
   (pushnew :sb-bsd-sockets-addrinfo *features*))
 
 (defsystem "sb-bsd-sockets"

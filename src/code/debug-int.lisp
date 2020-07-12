@@ -970,7 +970,7 @@
 ;;; address.
 (defun static-foreign-symbol-address (name)
   #+linkage-table
-  (find-dynamic-foreign-symbol-address name)
+  (find-foreign-symbol-address name)
   #-linkage-table
   (foreign-symbol-address name))
 

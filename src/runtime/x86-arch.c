@@ -405,3 +405,17 @@ arch_write_linkage_table_entry(int index, void *target_addr, int datap)
     /* write a nop for good measure. */
     *reloc_addr = 0x90;
 }
+
+void
+*arch_read_linkage_table_entry(int index, int datap)
+{
+  char *reloc_addr = (char*)LINKAGE_TABLE_SPACE_START + index * LINKAGE_TABLE_ENTRY_SIZE;
+  if (datap) {
+    return (unsigned long*) *(unsigned long *)reloc_addr;
+  }
+
+  long offset = 0;
+
+  offset = reloc_addr[1] + (reloc_addr[2] << 8) + (reloc_addr[3] << 16) + (reloc_addr[4] << 24);
+  return (void*) (offset + reloc_addr + 5);
+}

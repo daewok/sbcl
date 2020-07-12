@@ -22,6 +22,9 @@
 (define-alien-routine arch-write-linkage-table-entry void
   (index int) (real-address unsigned) (datap int))
 
+(define-alien-routine arch-read-linkage-table-entry (* t)
+  (index int) (datap int))
+
 (define-load-time-global *linkage-info*
     ;; CDR of the cons is the list of undefineds
     (list (make-hash-table :test 'equal :synchronized t)))
@@ -33,7 +36,8 @@
              ;; Produce two values: an indicator of whether the foreign symbol was
              ;; found; and the address as an integer if found, or a guard address
              ;; which when accessed will result in an UNDEFINED-ALIEN-ERROR.
-             `(let ((addr (find-dynamic-foreign-symbol-address name)))
+             `(let ((addr (or #+os-provides-dlopen
+                              (find-dynamic-foreign-symbol-address name))))
                 (cond (addr
                        (values t addr))
                       (t
@@ -71,7 +75,7 @@
                                                            (if datap 1 0))
                            (logically-readonlyize name)
                            (setf (gethash key ht) index))))))
-               (sb-vm::linkage-table-entry-address it))
+          (sb-vm::linkage-table-entry-address it))
         (error "Linkage-table full (~D entries): cannot link ~S."
                (hash-table-count ht) name))))
 
@@ -96,6 +100,7 @@
     (flet ((recheck (key index)
              (let* ((datap (listp key))
                     (name (if datap (car key) key)))
+               (declare (ignorable name))
                ;; Symbols required for Lisp startup
                ;; will not be re-pointed to a different address ever.
                ;; Nor will those referenced by ELF core.
@@ -114,3 +119,16 @@
             (recheck key (the (not null) (gethash key ht)))))
       (setf (cdr info) notdef)))))
 )
+
+(defun find-foreign-symbol-address-from-linkage-table (name)
+  "Returns the address of the foreign symbol NAME, or NIL. Consults only the
+linkage table to find the address."
+  (let* ((info *linkage-info*)
+         (ht (car info)))
+    (multiple-value-bind (index datap)
+        (with-system-mutex ((hash-table-lock ht))
+          (or (gethash name ht)
+              (values (gethash (list name) ht) t)))
+      (when (and index
+                 (not (member (if datap (list name) name) (cdr info) :test #'equal)))
+        (sap-int (alien-sap (arch-read-linkage-table-entry index (if datap 1 0))))))))

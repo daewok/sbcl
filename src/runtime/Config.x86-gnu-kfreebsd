@@ -17,7 +17,12 @@ include Config.x86-bsd
 # runtime.
 LINKFLAGS += -dynamic -Wl,--export-dynamic -m32
 
-OS_LIBS += -lutil -ldl -Wl,-no-as-needed
+OS_LIBS += -lutil
+
+OS_LIBDL = -ldl
+ifeq ($(or $(LISP_FEATURE_OS_PROVIDES_DLOPEN),$(LISP_FEATURE_OS_PROVIDES_DLADDR)),1)
+OS_LIBS += $(OS_LIBDL) -Wl,-no-as-needed
+endif
 
 # use libthr (1:1 threading).  libpthread (m:n threading) does not work.
 ifdef LISP_FEATURE_SB_THREAD

@@ -16,7 +16,10 @@
 symbol in the linkage table, and never returns an address in the linkage-table."
   (or #-linkage-table
       (find-foreign-symbol-in-table name *static-foreign-symbols*)
-      (find-dynamic-foreign-symbol-address name)))
+      #+os-provides-dlopen
+      (find-dynamic-foreign-symbol-address name)
+      #+(and linkage-table (not os-provides-dlopen))
+      (find-foreign-symbol-address-from-linkage-table name)))
 
 ;;; Note that much conditionalization is for nothing at this point, because all
 ;;; platforms that we care about implement dlopen(). But if one did not, only

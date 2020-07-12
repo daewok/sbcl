@@ -28,7 +28,12 @@ OS_SRC = linux-os.c linux-mman.c x86-linux-os.c
 # interface, though.:-| As far as I (WHN 2002-05-19) know, no one is
 # working on one and it would be a nice thing to have.)
 LINKFLAGS += -Wl,--export-dynamic -m32
-OS_LIBS = -ldl
+
+OS_LIBDL = -ldl
+ifeq ($(or $(LISP_FEATURE_OS_PROVIDES_DLOPEN),$(LISP_FEATURE_OS_PROVIDES_DLADDR)),1)
+OS_LIBS = $(OS_LIBDL)
+endif
+
 __LDFLAGS__ = -m elf_i386
 
 

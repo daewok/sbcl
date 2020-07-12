@@ -178,3 +178,14 @@ void arch_write_linkage_table_entry(int index, void *target_addr, int datap)
 
   os_flush_icache((os_vm_address_t) reloc_addr, (char*) inst_ptr - reloc_addr);
 }
+
+void
+*arch_read_linkage_table_entry(int index, int datap)
+{
+  char *reloc_addr = (char*)LINKAGE_TABLE_SPACE_START + index * LINKAGE_TABLE_ENTRY_SIZE;
+  if (datap) {
+    return (unsigned long*) *(unsigned long *)reloc_addr;
+  }
+
+  return *(void**)((int*)reloc_addr+2);
+}
