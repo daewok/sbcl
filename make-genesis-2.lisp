@@ -24,7 +24,10 @@
          :core-file-name "output/cold-sbcl.core"
          ;; The map file is not needed by the system, but can be
          ;; very handy when debugging cold init problems.
-         :map-file-name "output/cold-sbcl.map")
+         :map-file-name "output/cold-sbcl.map"
+         :linkage-table-prefill-info-c-name "src/runtime/linkage-table-prefill-info.c"
+         :extra-linkage-table-entries (when (probe-file "output/extra-linkage-table-entries.lisp-expr")
+                                        (read-from-file "output/extra-linkage-table-entries.lisp-expr")))
 #+cmu (ext:quit)
 #+clisp (ext:quit)
 #+abcl (ext:quit)

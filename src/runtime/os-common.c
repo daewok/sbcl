@@ -8,7 +8,6 @@
  * provided with absolutely no warranty. See the COPYING and CREDITS
  * files for more information.
  */
-# define _GNU_SOURCE /* needed for RTLD_DEFAULT from dlfcn.h */
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -28,9 +27,6 @@
 #include "arch.h"
 #include "interr.h"
 #include "immobile-space.h"
-#if defined(LISP_FEATURE_OS_PROVIDES_DLOPEN) && !defined(LISP_FEATURE_WIN32)
-# include <dlfcn.h>
-#endif
 
 /*
  * historically, this used sysconf to select the runtime page size
@@ -147,59 +143,53 @@ os_sem_destroy(os_sem_t *sem)
  *
  * Before any code in lisp image can be called, we have to resolve all
  * references to runtime foreign symbols that used to be static, adding linkage
- * table entry for each element of REQUIRED_FOREIGN_SYMBOLS.
+ * table entry for each element of lisp_linkage_values.
  */
 
-#if defined(LISP_FEATURE_LINKAGE_TABLE) && !defined(LISP_FEATURE_WIN32)
-void *
-os_dlsym_default(char *name)
-{
-    void *frob = dlsym(RTLD_DEFAULT, name);
-    return frob;
-}
+int lisp_linkage_table_n_prelinked;
+
+#if defined(LISP_FEATURE_ELF)
+// Weak only works on ELF targets and we'd like this to be weak on those
+// targets for shrinkwrapping.
+extern __attribute__((weak)) lispobj lisp_linkage_values;
+#else
+extern lispobj lisp_linkage_values;
 #endif
 
-int lisp_linkage_table_n_prelinked;
 void os_link_runtime()
 {
-    // There is a potentially better technique we could use which would simplify
-    // this function, rendering REQUIRED_FOREIGN_SYMBOLS unnecessary, namely:
-    // all we need are two prefilled entries: one for dlsym() itself, and one
-    // for the allocation region overflow handler ("alloc" or "alloc_tramp").
-    // Lisp can fill in the linkage table as the very first action on startup.
+
+    // There is a potentially better technique we could use which would
+    // simplify this function on platforms with dlopen/dlsym, namely: all we
+    // need are two prefilled entries: one for dlsym() itself, and one for the
+    // allocation region overflow handler ("alloc" or "alloc_tramp").  Lisp can
+    // fill in the linkage table as the very first action on startup.
 #ifdef LISP_FEATURE_LINKAGE_TABLE
     int entry_index = 0;
-    lispobj symbol_name;
-    char *namechars;
-    boolean datap;
-    void* result;
-    int j;
 
-    if (lisp_linkage_table_n_prelinked)
-        return; // Linkage was already performed by coreparse
+    // Prefill the Lisp linkage table using references stored in
+    // lisp_linkage_values. This array has an interesting format. The first
+    // entry is interpreted as how many references to symbols are found in the
+    // array. Each subsequent entry is either a reference or -1 (an invalid
+    // funciton pointer). A -1 indicates that the following reference is a
+    // reference to data instead of a function.
+    lispobj *ptr = &lisp_linkage_values;
 
-    struct vector* symbols = VECTOR(SymbolValue(REQUIRED_FOREIGN_SYMBOLS,0));
-    lisp_linkage_table_n_prelinked = fixnum_value(symbols->length);
-    for (j = 0 ; j < lisp_linkage_table_n_prelinked ; ++j)
-    {
-        lispobj item = symbols->data[j];
-        datap = listp(item);
-        symbol_name = datap ? CONS(item)->car : item;
-        namechars = (void*)(intptr_t)(VECTOR(symbol_name)->data);
-        result = os_dlsym_default(namechars);
-
+    if (&lisp_linkage_values) {
+      int count;
+      count = lisp_linkage_table_n_prelinked = *ptr++;
+      for ( ; count-- ; entry_index++ ) {
         if (entry_index == 0) {
 #ifdef LISP_FEATURE_WIN32
-            os_validate_recommit(LINKAGE_TABLE_SPACE_START, os_vm_page_size);
+          os_validate_recommit(LINKAGE_TABLE_SPACE_START, os_vm_page_size);
 #endif
         }
-        if (result) {
-            arch_write_linkage_table_entry(entry_index, result, datap);
-        } else { // startup might or might not work. ymmv
-            fprintf(stderr, "Missing required foreign symbol '%s'\n", namechars);
-        }
-
-        ++entry_index;
+        boolean datap = *ptr == (lispobj)-1; // -1 can't be a function address
+        if (datap)
+          ++ptr;
+        arch_write_linkage_table_entry(entry_index, (void*)*ptr++, datap);
+      }
+      return;
     }
 #endif /* LISP_FEATURE_LINKAGE_TABLE */
 }

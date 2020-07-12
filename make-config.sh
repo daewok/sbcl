@@ -88,7 +88,10 @@ do
         ;;
       --without)
         WITHOUT_FEATURES="$WITHOUT_FEATURES :$optarg"
-	;;
+	    ;;
+      --extra-linkage-table-entries=)
+        $optarg_ok && SBCL_EXTRA_LINKAGE_TABLE_ENTRIES=$optarg
+        ;;
       --fancy)
         WITH_FEATURES="$WITH_FEATURES $FANCY_FEATURES"
         # Lower down we add :sb-thread for platforms where it can be built.
@@ -213,6 +216,17 @@ Options:
                   Transfer the files to/from directory /home/user/sbcl
                   on host-machine.
 
+  --extra-linkage-table-entries=<path> Specify extra C symbols to include in
+                                       the linkage table
+
+      Path to a file specifying symbols that must be included in the
+      SBCL linkage table. Useful for statically linking libraries
+      into the runtime and ensuring the linker does not remove them.
+      The file must contain a single list of two element lists. Each
+      sublist must have a string naming a C symbol as its first
+      element and NIL or T (if the symbol names a variable) as its
+      second element.
+
 EOF
   exit 1
 fi
@@ -253,6 +267,11 @@ echo "$SBCL_DYNAMIC_SPACE_SIZE" > output/dynamic-space-size.txt
 find_gnumake
 
 ./generate-version.sh
+
+# Copy the extra linkage entries to output folder for Genesis to find.
+if [ -n "$SBCL_EXTRA_LINKAGE_TABLE_ENTRIES" ] && [ -f "$SBCL_EXTRA_LINKAGE_TABLE_ENTRIES" ]; then
+    cp "$SBCL_EXTRA_LINKAGE_TABLE_ENTRIES" output/extra-linkage-table-entries.lisp-expr
+fi
 
 # Now that we've done our option parsing and found various
 # dependencies, write them out to a file to be sourced by other

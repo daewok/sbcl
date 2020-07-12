@@ -73,8 +73,8 @@ endif
 
 COMMON_SRC = alloc.c backtrace.c breakpoint.c coalesce.c coreparse.c    \
 	dynbind.c funcall.c gc-common.c globals.c hopscotch.c           \
-	interr.c interrupt.c largefile.c main.c                         \
-	monitor.c murmur_hash.c os-common.c parse.c print.c             \
+	interr.c interrupt.c largefile.c linkage-table-prefill-info.c   \
+	main.c monitor.c murmur_hash.c os-common.c parse.c print.c      \
 	purify.c pthread-futex.c regnames.c runtime.c			\
 	safepoint.c save.c sc-offset.c search.c thread.c time.c         \
 	validate.c var-io.c vars.c wrap.c
@@ -117,6 +117,9 @@ unit-tests: gc-unit-tests.o libsbcl.a
 # On mingw64, it leads to an executable that cannot be executed.
 sbcl.o: $(OBJS)
 	$(LD) $(__LDFLAGS__) -r -o $@ $^
+
+linkage-table-prefill-info.o: linkage-table-prefill-info.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -Wno-builtin-declaration-mismatch  -c -o $@ $<
 
 libsbcl.a: $(OBJS)
 	rm -f $@ ; ar rcs $@ $^

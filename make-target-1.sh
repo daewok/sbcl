@@ -31,8 +31,9 @@ fi
 
 # Build the runtime system and symbol table (.nm) file.
 #
-# This C build has to come after the first genesis in order to get
-# the sbcl.h the C build needs.
+# This C build has to come after the first genesis in order to get the
+# sbcl.h the C build needs. This also needs to come after the second
+# genesis to get the symbol prelink table needed by the runtime.
 echo //building runtime system and symbol table file
 
 # The clean is needed for Darwin's readonlyspace hack.

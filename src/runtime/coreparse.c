@@ -93,7 +93,7 @@ open_binary(char *filename, int mode)
 int lisp_code_in_elf() { return 0; }
 #else
 extern __attribute__((weak)) lispobj
- lisp_code_start, lisp_jit_code, lisp_code_end, lisp_linkage_values;
+ lisp_code_start, lisp_jit_code, lisp_code_end;
 int lisp_code_in_elf() { return &lisp_code_start != 0; }
 #endif
 
@@ -743,30 +743,6 @@ process_directory(int count, struct ndir_entry *entry,
                (uword_t)&lisp_code_start, (uword_t)&lisp_code_end,
                varyobj_free_pointer);
 #endif
-        // Prefill the Lisp linkage table so that shrinkwrapped executables which link in
-        // all their C library dependencies can avoid linking with -ldl.
-        // All data references are potentially needed because aliencomp doesn't emit
-        // SAP-REF-n in a way that admits elision of the linkage entry. e.g.
-        //     MOV RAX, [#x20200AA0] ; some_c_symbol
-        //     MOV RAX, [RAX]
-        // might be rendered as
-        //     MOV RAX, some_c_symbol(%rip)
-        // but that's more of a change to the asm instructions than I'm comfortable making;
-        // whereas "CALL linkage_entry_for_f" -> "CALL f" is quite straightforward.
-        // (Rarely would a jmp indirection be used; maybe for newly compiled code?)
-        lispobj* ptr = &lisp_linkage_values;
-        gc_assert(ptr);
-        int entry_index = 0;
-        int count;
-        extern int lisp_linkage_table_n_prelinked;
-        count = lisp_linkage_table_n_prelinked = *ptr++;
-        for ( ; count-- ; entry_index++ ) {
-            boolean datap = *ptr == (lispobj)-1; // -1 can't be a function address
-            if (datap)
-                ++ptr;
-            arch_write_linkage_table_entry(entry_index, (void*)*ptr++, datap);
-        }
-
         // unprotect the pages
         os_protect((void*)VARYOBJ_SPACE_START, varyobj_space_size, OS_VM_PROT_ALL);
     } else
