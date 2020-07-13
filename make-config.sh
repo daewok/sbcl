@@ -92,6 +92,12 @@ do
       --extra-linkage-table-entries=)
         $optarg_ok && SBCL_EXTRA_LINKAGE_TABLE_ENTRIES=$optarg
         ;;
+      --enable-static-runtime)
+        SBCL_ENABLE_STATIC_RUNTIME="yes"
+        ;;
+      --extra-libs=)
+        $optarg_ok && SBCL_EXTRA_LIBS=$optarg
+        ;;
       --fancy)
         WITH_FEATURES="$WITH_FEATURES $FANCY_FEATURES"
         # Lower down we add :sb-thread for platforms where it can be built.
@@ -227,6 +233,18 @@ Options:
       element and NIL or T (if the symbol names a variable) as its
       second element.
 
+  --enable-static-runtime   Build a static SBCL runtime
+
+      Build a static SBCL runtime. Currently unable to complete the
+      build with this enabled unless --extra-linkage-table-entries
+      is also supplied that contains the C symbols that are referenced
+      for the first time in the warm build.
+
+  --extra-libs=<string>  Specify extra libraries to link against
+
+      The string is passed to the linker, before any of the default
+      libs.
+
 EOF
   exit 1
 fi
@@ -284,6 +302,12 @@ if [ -n "$SBCL_HOST_LOCATION" ]; then
 fi
 if [ -n "$SBCL_TARGET_LOCATION" ]; then
     echo "SBCL_TARGET_LOCATION=\"$SBCL_TARGET_LOCATION\"; export SBCL_TARGET_LOCATION" >> output/build-config
+fi
+if [ "$SBCL_ENABLE_STATIC_RUNTIME" = "yes" ]; then
+    echo "SBCL_ENABLE_STATIC_RUNTIME=\"yes\"; export SBCL_ENABLE_STATIC_RUNTIME" >> output/build-config
+fi
+if [ -n "$SBCL_EXTRA_LIBS" ]; then
+    echo "SBCL_EXTRA_LIBS=\"$SBCL_EXTRA_LIBS\"; export SBCL_EXTRA_LIBS" >> output/build-config
 fi
 
 # And now, sorting out the per-target dependencies...

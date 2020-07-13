@@ -71,6 +71,10 @@ __LDFLAGS__ += -nopie
 endif
 endif
 
+ifeq ($(SBCL_ENABLE_STATIC_RUNTIME),yes)
+LINKFLAGS += -no-pie -static
+endif
+
 COMMON_SRC = alloc.c backtrace.c breakpoint.c coalesce.c coreparse.c    \
 	dynbind.c funcall.c gc-common.c globals.c hopscotch.c           \
 	interr.c interrupt.c largefile.c linkage-table-prefill-info.c   \
@@ -89,7 +93,7 @@ SRCS = $(C_SRC) ${ASSEM_SRC}
 
 OBJS = $(C_SRC:.c=.o) $(ASSEM_SRC:.S=.o)
 
-LIBS = ${OS_LIBS} -lm
+LIBS += $(SBCL_EXTRA_LIBS) ${OS_LIBS} -lm
 
 ifdef LISP_FEATURE_SUNOS # don't bother running 'nm' (or 'gnm')
 targets: $(TARGET) $(OBJTARGET) sbcl.mk
