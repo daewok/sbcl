@@ -180,6 +180,7 @@ void os_link_runtime()
         return; // Linkage was already performed by coreparse
 
     fprintf(stderr,";;; sin addr: 0x%08x\n", &sin);
+    fprintf(stderr,";;; sin addr: 0x%08x\n", &malloc);
 
     struct vector* symbols = VECTOR(SymbolValue(REQUIRED_FOREIGN_SYMBOLS,0));
     lisp_linkage_table_n_prelinked = fixnum_value(symbols->length);

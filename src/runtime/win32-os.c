@@ -577,6 +577,9 @@ u32 os_get_build_time_shared_libraries(u32 excl_maximum,
                 odxprint(runtime_link, "DLL detection: %u, base %p: %s",
                          nlibrary, hmodule,
                          (char*)(base + image_import_descriptor->Name));
+                fprintf(stderr, "DLL detection: %u, base %p: %s",
+                         nlibrary, hmodule,
+                        (char*)(base + image_import_descriptor->Name));
                 ++ nlibrary;
             }
         }
@@ -599,6 +602,9 @@ void* os_dlsym_default(char* name)
     }
     for (i = 0; i<buildTimeImageCount && (!result); ++i) {
         result = GetProcAddress(buildTimeImages[i], name);
+        if (result) {
+          fprintf(stderr, ";;; Found in: %d\n", i);
+        }
     }
     fprintf(stderr, ";;; %s addr: 0x%08x\n", name, result);
     return result;
