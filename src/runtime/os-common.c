@@ -182,6 +182,10 @@ void os_link_runtime()
     fprintf(stderr,";;; sin addr: %p\n", &sin);
     fprintf(stderr,";;; malloc addr: %p\n", &malloc);
     fprintf(stderr,";;; os_allocate addr: %p\n", &os_allocate);
+    fprintf(stderr,";;; sin(most-positive-fixnum): %f\n", sin(4611686018427387903e0l));
+
+    fprintf(stderr, ";;; sin(most-positive-fixnum): %f\n",
+            ((double(*)(double))os_dlsym_default("sin"))(4611686018427387903e0l));
 
     struct vector* symbols = VECTOR(SymbolValue(REQUIRED_FOREIGN_SYMBOLS,0));
     lisp_linkage_table_n_prelinked = fixnum_value(symbols->length);
