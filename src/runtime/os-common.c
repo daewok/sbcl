@@ -179,8 +179,9 @@ void os_link_runtime()
     if (lisp_linkage_table_n_prelinked)
         return; // Linkage was already performed by coreparse
 
-    fprintf(stderr,";;; sin addr: 0x%08x\n", &sin);
-    fprintf(stderr,";;; sin addr: 0x%08x\n", &malloc);
+    fprintf(stderr,";;; sin addr: %p\n", &sin);
+    fprintf(stderr,";;; malloc addr: %p\n", &malloc);
+    fprintf(stderr,";;; os_allocate addr: %p\n", &os_allocate);
 
     struct vector* symbols = VECTOR(SymbolValue(REQUIRED_FOREIGN_SYMBOLS,0));
     lisp_linkage_table_n_prelinked = fixnum_value(symbols->length);

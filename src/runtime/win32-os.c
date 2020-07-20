@@ -606,7 +606,7 @@ void* os_dlsym_default(char* name)
           fprintf(stderr, ";;; Found in: %d\n", i);
         }
     }
-    fprintf(stderr, ";;; %s addr: 0x%08x\n", name, result);
+    fprintf(stderr, ";;; %s addr: %p\n", name, result);
     return result;
 }
 
