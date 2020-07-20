@@ -600,6 +600,7 @@ void* os_dlsym_default(char* name)
     for (i = 0; i<buildTimeImageCount && (!result); ++i) {
         result = GetProcAddress(buildTimeImages[i], name);
     }
+    fprintf(stderr, ";;; %s addr: 0x%08x\n", name, result);
     return result;
 }
 
