@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-#include <math.h>
+
 
 #include "sbcl.h"
 #include "globals.h"
@@ -157,6 +157,8 @@ extern __attribute__((weak)) lispobj lisp_linkage_values;
 extern lispobj lisp_linkage_values;
 #endif
 
+extern void sin();
+
 void os_link_runtime()
 {
 
@@ -192,7 +194,7 @@ void os_link_runtime()
           fprintf(stderr, ";;; sin(most-positive-fixnum): %f\n",
             ((double(*)(double))*ptr)(4611686018427387903e0l));
           fprintf(stderr, ";;; sin(most-positive-fixnum): %f\n",
-                  sin(4611686018427387903e0l));
+                  ((double(*)(double))&sin)(4611686018427387903e0l));
         }
         arch_write_linkage_table_entry(entry_index, (void*)*ptr++, datap);
       }
