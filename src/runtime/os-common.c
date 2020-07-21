@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-#include <math.h>
 
 #include "sbcl.h"
 #include "globals.h"
@@ -157,7 +156,7 @@ extern __attribute__((weak)) lispobj lisp_linkage_values;
 extern lispobj lisp_linkage_values;
 #endif
 
-//extern void sin();
+extern double sin(double);
 
 void os_link_runtime()
 {
