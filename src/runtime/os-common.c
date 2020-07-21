@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <math.h>
 
 #include "sbcl.h"
 #include "globals.h"
@@ -187,6 +188,12 @@ void os_link_runtime()
         boolean datap = *ptr == (lispobj)-1; // -1 can't be a function address
         if (datap)
           ++ptr;
+        if (entry_index==89) {
+          fprintf(stderr, ";;; sin(most-positive-fixnum): %f\n",
+            ((double(*)(double))*ptr)(4611686018427387903e0l));
+          fprintf(stderr, ";;; sin(most-positive-fixnum): %f\n",
+                  sin(4611686018427387903e0l));
+        }
         arch_write_linkage_table_entry(entry_index, (void*)*ptr++, datap);
       }
       return;
