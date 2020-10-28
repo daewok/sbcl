@@ -82,13 +82,24 @@ ifndef LISP_FEATURE_WIN32
 COMMON_SRC += run-program.c
 endif
 
+ifndef LISP_FEATURE_OS_PROVIDES_DLOPEN
+COMMON_SRC += linkage-table-prefill-info.c
+endif
+
 C_SRC = $(COMMON_SRC) ${ARCH_SRC} ${OS_SRC} ${GC_SRC}
 
 SRCS = $(C_SRC) ${ASSEM_SRC}
 
 OBJS = $(C_SRC:.c=.o) $(ASSEM_SRC:.S=.o)
 
+# "Commas ... cannot appear in the text of an argument as written"
+comma := ,
+
+ifeq ($(or $(LISP_FEATURE_OS_PROVIDES_DLOPEN),$(LISP_FEATURE_OS_PROVIDES_DLADDR)),1)
 LIBS = ${OS_LIBS} $(LDLIBS) -lm
+else
+LIBS = $(filter-out -ldl,$(filter-out -Wl$(comma)-no-as-needed,$(OS_LIBS))) $(LDLIBS) -lm
+endif
 
 targets: $(TARGET) $(OBJTARGET) sbcl.mk
 
@@ -113,6 +124,9 @@ unit-tests: gc-unit-tests.o libsbcl.a
 sbcl.o: $(OBJS)
 	$(LD) $(__LDFLAGS__) -r -o $@ $^
 
+linkage-table-prefill-info.o: linkage-table-prefill-info.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -Wno-builtin-declaration-mismatch  -c -o $@ $<
+
 libsbcl.a: $(OBJS)
 	rm -f $@ ; ar rcs $@ $^
 
@@ -134,7 +148,6 @@ shrinkwrap-sbcl.s shrinkwrap-sbcl-core.o: $(SHRINKWRAP_DEPS)
 pie-shrinkwrap-sbcl.s pie-shrinkwrap-sbcl-core.o: $(SHRINKWRAP_DEPS)
 	../../run-sbcl.sh --script ../../tools-for-build/editcore.lisp split --pie \
 		../../output/sbcl.core pie-shrinkwrap-sbcl.s
-comma := , # "Commas ... cannot appear in the text of an argument as written"
 shrinkwrap-sbcl: shrinkwrap-sbcl.s shrinkwrap-sbcl-core.o $(LIBSBCL)
 	$(CC) -no-pie $(filter-out -Wl$(comma)--export-dynamic, $(LINKFLAGS)) \
  $(CFLAGS) -o $@ $^ $(LIBS)
