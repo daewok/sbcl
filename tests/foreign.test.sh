@@ -486,5 +486,27 @@ cat > $TEST_FILESTEM.alien.enum.lisp <<EOF
 EOF
 expect_clean_compile $TEST_FILESTEM.alien.enum.lisp
 
+# If dlopen is available, check that the address we get for a symbol
+# from dlsym and from backing it out of the linkage table match.
+run_sbcl <<EOF
+  (eval-when (:compile-toplevel :load-toplevel :execute)
+    (setq *features* (union *features* sb-impl:+internal-features+)))
+  #+os-provides-dlopen
+  (progn
+    (extern-alien "posix_argv" (* (* char)))
+    (extern-alien "sin" (function double double))
+
+    ;; Test that data pointers are the same.
+    (assert (= (sb-sys:find-dynamic-foreign-symbol-address "posix_argv")
+               (sb-sys:find-linkage-table-foreign-symbol-address "posix_argv")))
+
+    ;; Test that function pointers are the same.
+    (assert (= (sb-sys:find-dynamic-foreign-symbol-address "sin")
+               (sb-sys:find-linkage-table-foreign-symbol-address "sin"))))
+
+  (exit :code $EXIT_LISP_WIN)
+EOF
+check_status_maybe_lose "arch-read-linkage-table-entry" $?
+
 # success convention for script
 exit $EXIT_TEST_WIN

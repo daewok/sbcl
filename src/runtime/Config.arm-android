@@ -17,7 +17,6 @@ ASSEM_SRC = arm-assem.S
 ARCH_SRC = arm-arch.c
 
 OS_SRC = linux-os.c linux-mman.c arm-linux-os.c android-os.c arm-android-os.c
-OS_LIBS = -ldl
 
 ifdef LISP_FEATURE_GENCGC
   GC_SRC = fullcgc.c gencgc.c traceroot.c

@@ -440,3 +440,11 @@ arch_write_linkage_table_entry(int index, void *target_addr, int datap)
         (char*)LINKAGE_TABLE_SPACE_END - (index + 1) * LINKAGE_TABLE_ENTRY_SIZE;
     *(unsigned int *)reloc_addr = (unsigned int)target_addr;
 }
+
+void
+*arch_read_linkage_table_entry(int index, int datap)
+{
+    char *reloc_addr =
+        (char*)LINKAGE_TABLE_SPACE_END - (index + 1) * LINKAGE_TABLE_ENTRY_SIZE;
+    return *(unsigned int *)reloc_addr;
+}

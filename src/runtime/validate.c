@@ -73,15 +73,9 @@ int os_reported_page_size;
 #include <sysinfoapi.h>
 #endif
 
+#ifdef LISP_FEATURE_OS_PROVIDES_DLOPEN
 static void
 ensure_undefined_alien(void) {
-#ifdef LISP_FEATURE_WIN32
-    SYSTEM_INFO info;
-    GetSystemInfo(&info);
-    os_reported_page_size = info.dwPageSize;
-#else
-    os_reported_page_size = getpagesize();
-#endif
     os_vm_address_t start = os_validate(MOVABLE|IS_GUARD_PAGE, NULL, os_reported_page_size);
     if (start) {
         undefined_alien_address = start;
@@ -89,6 +83,7 @@ ensure_undefined_alien(void) {
         lose("could not allocate guard page for undefined alien");
     }
 }
+#endif
 
 boolean allocate_hardwired_spaces(boolean hard_failp)
 {
@@ -134,6 +129,13 @@ allocate_lisp_dynamic_space(boolean did_preinit)
     if (!did_preinit)
       allocate_hardwired_spaces(1);
 
+#ifdef LISP_FEATURE_WIN32
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    os_reported_page_size = info.dwPageSize;
+#else
+    os_reported_page_size = getpagesize();
+#endif
 #ifdef LISP_FEATURE_OS_PROVIDES_DLOPEN
     ensure_undefined_alien();
 #endif

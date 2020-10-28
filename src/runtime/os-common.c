@@ -175,7 +175,7 @@ void os_link_from_pointer_table(lispobj* table_ptr)
     }
 }
 
-#ifndef LISP_FEATURE_WIN32
+#if !defined(LISP_FEATURE_WIN32) && defined(LISP_FEATURE_OS_PROVIDES_DLOPEN)
 void *
 os_dlsym_default(char *name)
 {
@@ -184,19 +184,24 @@ os_dlsym_default(char *name)
 }
 #endif
 
+#ifndef LISP_FEATURE_OS_PROVIDES_DLOPEN
+extern lispobj lisp_linkage_table;
+#endif
+
 int lisp_linkage_table_n_prelinked;
 void os_link_runtime()
 {
-    int entry_index = 0;
-    lispobj symbol_name;
-    char *namechars;
-    boolean datap;
-    void* result;
-    int j;
+    int __attribute__((unused)) entry_index = 0;
+    lispobj __attribute__((unused)) symbol_name;
+    char __attribute__((unused)) *namechars;
+    boolean __attribute__((unused)) datap;
+    void* __attribute__((unused)) result;
+    int __attribute__((unused)) j;
 
     if (lisp_linkage_table_n_prelinked)
         return; // Linkage was already performed by coreparse
 
+#ifdef LISP_FEATURE_OS_PROVIDES_DLOPEN
     struct vector* symbols = VECTOR(SymbolValue(REQUIRED_FOREIGN_SYMBOLS,0));
     lisp_linkage_table_n_prelinked = fixnum_value(symbols->length);
     for (j = 0 ; j < lisp_linkage_table_n_prelinked ; ++j)
@@ -215,6 +220,9 @@ void os_link_runtime()
 
         ++entry_index;
     }
+#else
+    os_link_from_pointer_table(&lisp_linkage_table);
+#endif
 }
 
 void os_unlink_runtime()
@@ -288,5 +296,3 @@ gc_managed_addr_p(lispobj addr)
     }
     return 0;
 }
-
-
