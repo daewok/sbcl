@@ -404,6 +404,8 @@ extern char *copied_string (char *string);
 # define GENCGC_IS_PRECISE 0
 #endif
 
+void os_link_from_pointer_table(lispobj *table_ptr);
+
 void *os_dlsym_default(char *name);
 
 struct lisp_startup_options {

@@ -16,6 +16,7 @@
 #include "sbcl.h"
 #include "globals.h"
 #include "runtime.h"
+#include "gc-assert.h"
 #include "genesis/config.h"
 #include "genesis/constants.h"
 #include "genesis/cons.h"
@@ -147,6 +148,32 @@ os_sem_destroy(os_sem_t *sem)
  * references to runtime foreign symbols that used to be static, adding linkage
  * table entry for each element of REQUIRED_FOREIGN_SYMBOLS.
  */
+
+void os_link_from_pointer_table(lispobj* table_ptr)
+{
+    // Prefill the Lisp linkage table so that shrinkwrapped executables which link in
+    // all their C library dependencies can avoid linking with -ldl.
+    // All data references are potentially needed because aliencomp doesn't emit
+    // SAP-REF-n in a way that admits elision of the linkage entry. e.g.
+    //     MOV RAX, [#x20200AA0] ; some_c_symbol
+    //     MOV RAX, [RAX]
+    // might be rendered as
+    //     MOV RAX, some_c_symbol(%rip)
+    // but that's more of a change to the asm instructions than I'm comfortable making;
+    // whereas "CALL linkage_entry_for_f" -> "CALL f" is quite straightforward.
+    // (Rarely would a jmp indirection be used; maybe for newly compiled code?)
+    gc_assert(table_ptr);
+    int entry_index = 0;
+    int count;
+    extern int lisp_linkage_table_n_prelinked;
+    count = lisp_linkage_table_n_prelinked = *table_ptr++;
+    for ( ; count-- ; entry_index++ ) {
+        boolean datap = *table_ptr == (lispobj)-1; // -1 can't be a function address
+        if (datap)
+            ++table_ptr;
+        arch_write_linkage_table_entry(entry_index, (void*)*table_ptr++, datap);
+    }
+}
 
 #ifndef LISP_FEATURE_WIN32
 void *
