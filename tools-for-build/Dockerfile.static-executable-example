@@ -1,0 +1,80 @@
+ARG sbcl_version=2.1.0
+ARG sbcl_signing_key=D6839CA0A67F74D9DFB70922EBD595A9100D63CD
+ARG daewok_signing_key=823DF61DEDB633B3DE7B2B7C181191EF9ACF6934
+
+FROM clfoundation/sbcl:$sbcl_version-alpine3.12
+
+ARG sbcl_version
+ARG sbcl_signing_key
+ARG daewok_signing_key
+
+WORKDIR /usr/local/src
+
+# Download and patch the SBCL source code
+
+RUN set -x \
+    && apk add --no-cache ca-certificates curl openssl make gcc musl-dev linux-headers gnupg patch \
+    && GNUPGHOME="$(mktemp -d)" \
+    && export GNUPGHOME \
+    && (gpg --batch --keyserver ha.pool.sks-keyservers.net --recv-keys "$sbcl_signing_key" \
+        || gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$sbcl_signing_key" \
+       ) \
+    && (gpg --batch --keyserver ha.pool.sks-keyservers.net --recv-keys "$daewok_signing_key" \
+        || gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$daewok_signing_key" \
+       ) \
+    && curl -fsSL "https://downloads.sourceforge.net/project/sbcl/sbcl/${sbcl_version}/sbcl-${sbcl_version}-crhodes.asc" > "sbcl-${sbcl_version}-crhodes.asc" \
+    && gpg --batch --verify "sbcl-${sbcl_version}-crhodes.asc" \
+    && gpg --batch --decrypt "sbcl-${sbcl_version}-crhodes.asc" > "sbcl-${sbcl_version}-crhodes.txt" \
+    && curl -fsSL "https://downloads.sourceforge.net/project/sbcl/sbcl/${sbcl_version}/sbcl-${sbcl_version}-source.tar.bz2" > "sbcl-${sbcl_version}-source.tar.bz2" \
+    && bunzip2 "sbcl-${sbcl_version}-source.tar.bz2" \
+    && grep "sbcl-${sbcl_version}-source.tar" "sbcl-${sbcl_version}-crhodes.txt" > "${sbcl_version}-sum-file.txt" \
+    && sha256sum -c "${sbcl_version}-sum-file.txt" \
+    && tar xf "sbcl-${sbcl_version}-source.tar" \
+    && (cd "sbcl-${sbcl_version}/" \
+        # Remove the hardcoding of armv5 as target arch. Use the default
+        # provided by the base image.
+        && sed -i -e "s/CFLAGS += -marm -march=armv5/CFLAGS += -marm/" src/runtime/Config.arm-linux \
+        && curl -fsSL "https://www.timmons.dev/static/patches/sbcl/$sbcl_version/static-executable-support.patch" > static-executable-support.patch \
+        && curl -fsSL "https://www.timmons.dev/static/patches/sbcl/$sbcl_version/static-executable-support.patch.asc" > static-executable-support.patch.asc \
+        && gpg --batch --verify static-executable-support.patch.asc static-executable-support.patch \
+        && patch -p1 < static-executable-support.patch \
+        && rm static-executable-support.patch static-executable-support.patch.asc \
+        && cd /usr/local/src \
+       ) \
+    && rm -rf "$GNUPGHOME" \
+    && sbcl --version
+
+WORKDIR /usr/local/src/sbcl-$sbcl_version
+
+# Load sb-gmp into an image, and save the foreign symbols it requires.
+
+RUN set -x \
+    && apk add --no-cache gmp-dev \
+    && sbcl --non-interactive --eval '(require :sb-gmp)' --load tools-for-build/dump-linkage-info.lisp --eval '(sb-dump-linkage-info:dump-to-file "/tmp/linkage-info.sexp")'
+
+# Rebuild a static SBCL, with libgmp linked and the required symbols in the
+# linkage table.
+
+RUN set -x \
+    # I frequently build arm executables on an arm64 computer. Need to add this
+    # otherwise SBCL can get confused
+    && case "$(cat /etc/apk/arch)" in \
+         armv7) SBCL_ARCH=arm;; \
+         aarch64) SBCL_ARCH=arm64;; \
+         x86_64) SBCL_ARCH=x86-64;; \
+         *) echo "Unknown arch" >&2; exit 1;; \
+       esac \
+    && export SBCL_ARCH \
+    && LDLIBS="-lgmp" LINKFLAGS="-no-pie -static" IGNORE_CONTRIB_FAILURES="yes" sh make.sh --extra-linkage-table-entries=/tmp/linkage-info.sexp --without-os-provides-dlopen --without-os-provides-dladdr
+
+# Create a static executable with sb-gmp preloaded that simply runs the test
+# suite.
+
+RUN set -x \
+    && sh run-sbcl.sh \
+          --non-interactive \
+          --eval '(require :uiop)' \
+          --eval '(require :sb-gmp)' \
+          --eval '(require :sb-rt)' \
+          --eval '(defvar *sb-gmp-tests* (uiop:read-file-string "contrib/sb-gmp/tests.lisp"))' \
+          --eval '(sb-ext:save-lisp-and-die "/tmp/sb-gmp-tester" :executable t :toplevel (lambda () (uiop:load-from-string *sb-gmp-tests*) (sb-rt:do-tests) (exit)))'
