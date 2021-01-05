@@ -1,0 +1,102 @@
+This branch of SBCL is maintained by Eric Timmons (@daewok) and contains a set
+of patches necessary to build a completely static executable with SBCL. Such an
+executable has all necessary foreign libraries statically linked into the
+runtime and has no support for dynamic loading and unloading of
+libraries. While the lack of dynamic loading support is certainly constraining,
+the benefit of building an executable this way is it requires no libraries to
+be installed by the user of the executable. This makes it ideal for archival
+purposes, distributing executables to a non-technical audience, distributing an
+executable where you must know the exact versions of external libraries used at
+runtime, or distributing executables that Just Work^TM (like many executables
+written in golang).
+
+While other solutions exist to statically link foreign libraries into the SBCL
+runtime, to the best of my knowledge there has been no publicly advertised
+method of building SBCL with libc statically linked. The lack of static linking
+for libc means that the user of the executable must have a compatible libc
+installed. Unfortunately, the most commonly used libc in the Linux world
+(glibc) is frequently not backward compatible with itself. For evidence of
+this, see the fact that SBCLs built on Debian Buster (like the official
+releases since 1.5.6) do not run on Debian Stretch.
+
+Unfortunately, glibc doesn't even really support static linking at
+all. Therefore, I recommend that static SBCL executables be built only with
+musl libc. Musl is designed with static linking in mind and is broadly
+compatible with most libraries that don't do tricksy things with libc. And if
+you find a library not compatible with musl libc, it seems most maintainers are
+welcoming to patches that add support.
+
+Alpine Linux is a great OS for building statically linked executables as it
+uses musl libc by default. I further strongly recommend using Docker for
+building static executables so that you don't need to maintain a separate
+Alpine install. Plus, you can use the clfoundation/sbcl:alpine image as a
+starting point.
+
+BUILDING A STATIC EXECUTABLE
+
+As libdl will not be available at runtime, we need to determine what C symbols
+our Lisp code needs so that we can prefill SBCL's linkage table with the
+correct addresses. The easiest way to do this is to create your image like
+normal using a regular SBCL build and then dump the necessary information to a
+file. To do this, I have included the tools-for-build/dump-linkage-info.lisp
+file. Just load this into your image after building it and execute
+(sb-dump-linkage-info:dump-to-file "/PATH/TO/OUTPUT.sexp"). then use this file
+while building.
+
+Here is an example of how to build a static SBCL with GMP support.
+
+1. First, build SBCL like normal with:
+
+    sh make.sh
+
+2. Run:
+
+    sh run-sbcl.sh --non-interactive --no-sysinit --no-userinit --eval '(require :sb-gmp)' --load tools-for-build/dump-linkage-info.lisp --eval '(sb-dump-linkage-info:dump-to-file "/tmp/linkage-info.sexp")'
+
+3. Build SBCL again, this time with everything (including libgmp) statically
+linked:
+
+    LDLIBS="-lgmp" LINKFLAGS="-no-pie -static" IGNORE_CONTRIB_FAILURES="yes" sh make.sh --extra-linkage-table-entries=/tmp/linkage-info.sexp --without-os-provides-dlopen --without-os-provides-dladdr
+
+You'll notice that many of the contribs fail to build. That's because they
+depend on libdl being present to find their symbols. But, sb-gmp should have
+built successfully.
+
+4. Look at the built runtime. You should see that it is a static executable.
+
+    ldd src/runtime/sbcl
+
+5. Build an image and dump it. This image has sb-gmp preloaded and simply loads
+the sb-gmp tests and runs them when executed. The funny business with reading
+the tests into a string and then using uiop:load-from-string is because for
+some reason, the tests do not like being dumped. I have not yet cared to
+investigate why this is.
+
+    sh run-sbcl.sh \
+       --non-interactive \
+       --eval '(require :uiop)' \
+       --eval '(require :sb-gmp)' \
+       --eval '(require :sb-rt)' \
+       --eval '(defvar *sb-gmp-tests* (uiop:read-file-string "contrib/sb-gmp/tests.lisp"))' \
+       --eval '(sb-ext:save-lisp-and-die "/tmp/sb-gmp-tester" :executable t :toplevel (lambda () (uiop:load-from-string *sb-gmp-tests*) (sb-rt:do-tests) (exit)))'
+
+6. Run the resulting executable!
+
+    /tmp/sb-gmp-tester
+
+BUILDING A STATIC EXECUTABLE WITH DOCKER
+
+See the Dockerfile at tools-for-build/Dockerfile.static-executable-example for
+an example of how to build the above executable using Docker instead. You can
+build the executable and place it at /tmp/sb-gmp-tester on your local file
+system by running the following:
+
+    IMAGE_ID_FILE="$(mktemp)"
+    CONTAINER_ID_FILE="$(mktemp)"
+    rm "$CONTAINER_ID_FILE"
+    docker build --iidfile "$IMAGE_ID_FILE" -f tools-for-build/Dockerfile.static-executable-example .
+    docker create --cidfile "$CONTAINER_ID_FILE" "$(cat "$IMAGE_ID_FILE")"
+    docker cp "$(cat "$CONTAINER_ID_FILE"):/tmp/sb-gmp-tester" /tmp/sb-gmp-tester
+    docker rm "$(cat "$CONTAINER_ID_FILE")"
+    rm "$IMAGE_ID_FILE"
+    rm "$CONTAINER_ID_FILE"
