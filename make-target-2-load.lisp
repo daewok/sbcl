@@ -35,6 +35,10 @@
           ;; more-or-less confined to serve-event, except for a test which now
           ;; detects whether COMPUTE-POLLFDS is defined and therefore testable.
           :OS-PROVIDES-POLL
+          ;; Used by genesis and C. Genesis uses presence of this feature to
+          ;; determine if a C file should be written to contain the linkage
+          ;; info.
+          :SB-PRELINK-LINKAGE-TABLE
           ;; The final batch of symbols is strictly for C. The LISP_FEATURE_
           ;; prefix on the corresponding #define is unfortunate.
           :GCC-TLS :USE-SYS-MMAP

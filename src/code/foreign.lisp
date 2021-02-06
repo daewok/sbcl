@@ -50,6 +50,7 @@ if the symbol isn't found."
         (int-sap addr))))
 
 (defun foreign-reinit ()
+  (fixup-prelinked-linkage-table-entries)
   #+os-provides-dlopen (reopen-shared-objects)
   (update-linkage-table t))
 
