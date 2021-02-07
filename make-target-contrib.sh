@@ -114,6 +114,6 @@ EOF
   fi
 done
 
-if [ $HEADER_HAS_BEEN_PRINTED = true ]; then
+if [ $HEADER_HAS_BEEN_PRINTED = true ] && [ "$IGNORE_CONTRIB_FAILURES" != "yes" ]; then
   exit 1
 fi
