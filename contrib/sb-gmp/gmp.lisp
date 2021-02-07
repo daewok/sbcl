@@ -84,6 +84,7 @@
             #-(or win32 darwin) '("libgmp.so" "libgmp.so.10" "libgmp.so.3")
             #+darwin '("libgmp.dylib" "libgmp.10.dylib" "libgmp.3.dylib")
             #+win32 '("libgmp.dll" "libgmp-10.dll" "libgmp-3.dll"))
+      (sb-alien::find-foreign-symbol-address "__gmp_version")
       (warn "GMP not loaded.")))
 
 (defvar *gmp-features* nil)
