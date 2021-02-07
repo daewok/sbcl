@@ -1,0 +1,63 @@
+# Example Dockerfile to build a static executable with SBCL. The example
+# executable simply runs the sb-gmp contrib tests. The exeutable has libc,
+# libgmp, and libz staticially linked in. It is simple, however it demonstrates
+# that a static executable can run on ~any Linux system.
+
+FROM clfoundation/sbcl:alpine3.13
+
+COPY . /usr/local/src/sbcl/
+
+WORKDIR /usr/local/src/sbcl
+
+# Install build prereq and build SBCL with sb-linkable-runtime and
+# sb-prelink-linkage-table
+RUN set -x \
+    # I frequently build arm executables on an arm64 computer. Need to add this
+    # otherwise SBCL can get confused
+    && case "$(cat /etc/apk/arch)" in \
+         armv7) SBCL_ARCH=arm;; \
+         aarch64) SBCL_ARCH=arm64;; \
+         x86_64) SBCL_ARCH=x86-64;; \
+         *) echo "Unknown arch" >&2; exit 1;; \
+       esac \
+    && export SBCL_ARCH \
+    && apk add --no-cache ca-certificates curl openssl make gcc musl-dev linux-headers gnupg patch zlib-dev zlib-static \
+    # Remove the hardcoding of armv5 as target arch. Use the default provided
+    # by the base image. Required when building for ARM on Alpine 3.12.
+    && sed -i -e "s/CFLAGS += -marm -march=armv5/CFLAGS += -marm/" src/runtime/Config.arm-linux \
+    && sh make.sh --fancy --with-sb-linkable-runtime --with-sb-prelink-linkage-table \
+    && sh install.sh
+
+# Load sb-gmp into an image, save the foreign symbols it requires, and dump the
+# core.
+RUN set -x \
+    && apk add --no-cache gmp-dev \
+    && sbcl --non-interactive \
+            --eval '(require :uiop)' \
+            --eval '(require :sb-gmp)' \
+            --eval '(require :sb-rt)' \
+            --eval '(defvar *sb-gmp-tests* (uiop:read-file-string "contrib/sb-gmp/tests.lisp"))' \
+            --load tools-for-build/dump-linkage-info.lisp \
+            --eval '(sb-dump-linkage-info:dump-to-file "/tmp/linkage-info.sexp")' \
+            --eval '(sb-ext:save-lisp-and-die "/tmp/sb-gmp-tester.core")'
+
+# Build a static runtime, with libgmp linked and the required symbols in the
+# linkage table.
+RUN set -x \
+    && sbcl --script tools-for-build/create-linkage-table-prelink-info-override.lisp \
+            /tmp/linkage-info.sexp \
+            /tmp/linkage-table-prelink-info-override.c \
+    && while read l; do \
+         eval "${l%%=*}=\"${l#*=}\""; \
+       done < /usr/local/lib/sbcl/sbcl.mk \
+    && $CC $CFLAGS -Wno-builtin-declaration-mismatch -o /tmp/linkage-table-prelink-info-override.o -c /tmp/linkage-table-prelink-info-override.c \
+    && $CC -no-pie -static $LINKFLAGS -o /tmp/static-sbcl /usr/local/lib/sbcl/$LIBSBCL /tmp/linkage-table-prelink-info-override.o -lgmp $LIBS
+
+# Use the new static runtime to load the previous core and then dump a
+# compressed executable with the toplevel function set to run the sb-gmp test
+# suite.
+RUN set -x \
+    && /tmp/static-sbcl \
+        --core /tmp/sb-gmp-tester.core \
+        --non-interactive \
+        --eval '(sb-ext:save-lisp-and-die "/tmp/sb-gmp-tester" :executable t :toplevel (lambda () (uiop:load-from-string *sb-gmp-tests*) (sb-rt:do-tests) (exit)) :compression t)'
