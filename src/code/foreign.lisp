@@ -14,10 +14,10 @@
 (defun find-foreign-symbol-address (name)
   "Returns the address of the foreign symbol NAME, or NIL. Does not enter the
 symbol in the linkage table, and never returns an address in the linkage-table."
-  #+os-provides-dlopen
-  (find-dynamic-foreign-symbol-address name)
-  #-os-provides-dlopen
-  (find-linkage-table-foreign-symbol-address name))
+  (or
+   #+os-provides-dlopen
+   (find-dynamic-foreign-symbol-address name)
+   (find-linkage-table-foreign-symbol-address name)))
 
 ;;; Note that much conditionalization is for nothing at this point, because all
 ;;; platforms that we care about implement dlopen(). But if one did not, only
@@ -36,10 +36,9 @@ The returned address is always a linkage-table address.
 Symbols are entered into the linkage-table if they aren't there already."
   (declare (ignorable datap))
   (values
-   #+os-provides-dlopen
-   (ensure-foreign-symbol-linkage name datap)
-   #-os-provides-dlopen
    (or (linkage-table-address name datap)
+       #+os-provides-dlopen
+       (ensure-foreign-symbol-linkage name datap)
        (error 'undefined-alien-error :name name))
    t))
 
@@ -60,8 +59,10 @@ if the symbol isn't found."
 
 (defun foreign-reinit ()
   (fixup-prelinked-linkage-table-entries)
-  #+os-provides-dlopen (reopen-shared-objects)
-  #+os-provides-dlopen (update-linkage-table t))
+  #+os-provides-dlopen
+  (progn
+    (reopen-shared-objects)
+    (update-linkage-table t)))
 
 ;;; Cleanups before saving a core
 (defun foreign-deinit ()
