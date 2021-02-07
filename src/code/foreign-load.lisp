@@ -145,7 +145,7 @@ Experimental."
 ;;; initialization.
 (defun reopen-shared-objects ()
   ;; Ensure that the runtime is open
-  (setf *runtime-dlhandle* (dlopen-or-lose))
+  (setf *runtime-dlhandle* (ignore-errors (dlopen-or-lose)))
   ;; Without this many symbols aren't accessible.
   #+android (load-shared-object "libc.so" :dont-save t)
   ;; Reopen stuff.

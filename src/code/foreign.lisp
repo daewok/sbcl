@@ -110,7 +110,7 @@ if the symbol isn't found."
         and reference across (symbol-value 'sb-vm::+required-foreign-symbols+)
         do (setf (gethash reference (car *linkage-info*)) table-offset))
   #+os-provides-dlopen
-  (setf *runtime-dlhandle* (dlopen-or-lose))
+  (setf *runtime-dlhandle* (ignore-errors (dlopen-or-lose)))
   #+os-provides-dlopen
   (setf *shared-objects* nil))
 
