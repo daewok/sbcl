@@ -32,6 +32,11 @@ ifdef LISP_FEATURE_LARGEFILE
 endif
 LINKFLAGS += -Wl,--export-dynamic
 
+ifdef LISP_FEATURE_SB_LINKABLE_RUNTIME
+  LIBSBCL = sbcl.o
+  USE_LIBSBCL = sbcl.o
+endif
+
 # Nothing to do for after-grovel-headers.
 .PHONY: after-grovel-headers
 after-grovel-headers:
