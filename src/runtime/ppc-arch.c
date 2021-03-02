@@ -835,3 +835,43 @@ arch_write_linkage_table_entry(int index, void *target_addr, int datap)
 
   os_flush_icache((os_vm_address_t) reloc_addr, (char*) inst_ptr - reloc_addr);
 }
+
+void
+*arch_read_linkage_table_entry(int index, int datap)
+{
+  char *reloc_addr = (char*)LINKAGE_TABLE_SPACE_START + index * LINKAGE_TABLE_ENTRY_SIZE;
+  if (datap) {
+    return *(unsigned long *)reloc_addr;
+  }
+
+#if defined LISP_FEATURE_64_BIT
+#ifdef LISP_FEATURE_LITTLE_ENDIAN
+  int* inst_ptr;
+  unsigned long a0, a16, a32, a48;
+
+  inst_ptr = (int*) reloc_addr;
+
+  a48 = *inst_ptr++ & 0xffff;
+  a32 = *inst_ptr++ & 0xffff;
+  inst_ptr++;
+  a16 = *inst_ptr++ & 0xffff;
+  a0 = *inst_ptr++ & 0xffff;
+
+  return (void*) (a0 + (a16 << 16) + (a32 << 32) + (a48 << 48));
+#else
+  void *target_addr;
+  memcpy(target_addr, reloc_addr, 24);
+  return target_addr;
+#endif
+#endif
+  int* inst_ptr;
+  unsigned long hi;
+  unsigned long lo;
+
+  inst_ptr = (int*) reloc_addr;
+
+  hi = *inst_ptr++ & 0xffff;
+  lo = *inst_ptr++ & 0xffff;
+
+  return (void*) (lo + (hi << 16));
+}
