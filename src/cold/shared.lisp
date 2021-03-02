@@ -315,7 +315,7 @@
          ("(not (or elf mach-o win32))"
           "No execute object file format feature defined")
          ("(and cons-profiling (not sb-thread))" ":CONS-PROFILING requires :SB-THREAD")
-         ("(and sb-linkable-runtime (not (or x86 x86-64)))"
+         ("(and sb-linkable-runtime (not (or arm arm64 x86 x86-64)))"
           ":SB-LINKABLE-RUNTIME not supported on selected architecture")
          ("(and sb-linkable-runtime (not (or darwin linux win32)))"
           ":SB-LINKABLE-RUNTIME not supported on selected operating system")
