@@ -152,6 +152,14 @@ void arch_write_linkage_table_entry(int index, void *target_addr, int datap)
     *(uword_t*)reloc_addr = (uword_t)target_addr;
 }
 
+void
+*arch_read_linkage_table_entry(int index, int datap)
+{
+    char *reloc_addr =
+        (char*)LINKAGE_TABLE_SPACE_END - (index + 1) * LINKAGE_TABLE_ENTRY_SIZE;
+    return *(uword_t *)reloc_addr;
+}
+
 lispobj call_into_lisp(lispobj fun, lispobj *args, int nargs) {
     return ((lispobj(*)(lispobj, lispobj *, int, struct thread*))SYMBOL(CALL_INTO_LISP)->value)
       (fun, args, nargs, get_sb_vm_thread());
