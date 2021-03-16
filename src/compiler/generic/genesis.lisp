@@ -2219,6 +2219,44 @@ Legal values for OFFSET are -4, -8, -12, ..."
                (cold-cons (cold-intern (first rtn)) (make-fixnum-descriptor (cdr rtn))))
              '*!initial-assembler-routines*)))
 
+#+sb-prelink-linkage-table
+(defun foreign-symbols-to-c (output-pathname)
+  (with-open-file (output output-pathname
+                          :direction :output
+                          :if-exists :supersede)
+    (let ((sorted-pairs (sort (%hash-table-alist *cold-foreign-symbol-table*) #'< :key #'cdr)))
+      ;; Needed for uintptr_t. We use the raw uintptr_t as we don't want to have
+      ;; to include any SBCL headers just to get at lispobj.
+      (format output "#include <stdint.h>~%~%")
+
+      ;; Write out the extern definitions. Everything is a void function (even
+      ;; variables) because compilers don't like void variables. Remove
+      ;; lisp_linkage_values as we need to write to it, so we should use the
+      ;; actual type.
+      (format output "extern void ~{~A()~^, ~};~%~%"
+              (remove "lisp_linkage_values"
+                      (mapcar (lambda (x)
+                                (if (listp (car x))
+                                    (caar x)
+                                    (car x)))
+                              sorted-pairs)
+                      :test #'equal))
+
+      #-win32
+      (format output "uintptr_t __attribute__((weak)) lisp_linkage_values[] = {~%")
+      #+win32
+      (format output "uintptr_t lisp_linkage_values[] = {~%")
+
+      (format output "  ~D,~%" (length sorted-pairs))
+      (dolist (pair sorted-pairs)
+        (when (listp (car pair))
+          ;; This is data, put -1 in to indicate that.
+          (format output "  (uintptr_t)-1,~%"))
+        (format output "  (uintptr_t)&~A,~%" (if (listp (car pair))
+                                                 (caar pair)
+                                                 (car pair))))
+      (format output "};~%"))))
+
 
 ;;;; general machinery for cold-loading FASL files
 
@@ -3585,11 +3623,15 @@ III. initially undefined function references (alphabetically):
 ;;;   CORE-FILE-NAME gets a Lisp core.
 ;;;   C-HEADER-DIR-NAME gets the path in which to place generated headers
 ;;;   MAP-FILE-NAME gets the name of the textual 'cold-sbcl.map' file
+;;;   LINKAGE-TABLE-PREFILL-INFO-C-NAME gets a .c file used to store the
+;;;     data used to link the runtime before entering Lisp.
 (defun sb-cold:genesis (&key object-file-names tls-init
                              defstruct-descriptions
                              core-file-name c-header-dir-name map-file-name
-                             symbol-table-file-name (verbose t))
-  (declare (ignorable symbol-table-file-name))
+                             symbol-table-file-name (verbose t)
+                             linkage-table-prefill-info-c-name
+                             extra-linkage-table-entries)
+  (declare (ignorable symbol-table-file-name linkage-table-prefill-info-c-name))
 
   (when verbose
     (format t
@@ -3607,6 +3649,9 @@ III. initially undefined function references (alphabetically):
     ;; Prefill some linkage table entries perhaps
     (loop for (name datap) in sb-vm::*linkage-space-predefined-entries*
           do (linkage-table-note-symbol name datap))
+    (loop for (name datap undefinedp) in extra-linkage-table-entries
+          unless undefinedp
+            do (linkage-table-note-symbol name datap))
     #-(or linkage-table crossbuild-test)
     (when core-file-name
       (if symbol-table-file-name
@@ -3786,6 +3831,9 @@ III. initially undefined function references (alphabetically):
       (resolve-deferred-known-funs)
       (resolve-static-call-fixups)
       (foreign-symbols-to-core)
+      #+sb-prelink-linkage-table
+      (when linkage-table-prefill-info-c-name
+        (foreign-symbols-to-c linkage-table-prefill-info-c-name))
       #+(or x86 immobile-space)
       (dolist (pair (sort (%hash-table-alist *code-fixup-notes*) #'< :key #'car))
         (write-wordindexed (make-random-descriptor (car pair))

@@ -118,6 +118,33 @@
       (setf (cdr info) notdef)))))
 )
 
+;; TODO: Is there a way to avoid this? This is needed because on some
+;; platforms, the undefined alien function handler is not available at compile
+;; time (it's an assembly routine created in Lisp).
+(defun fixup-prelinked-linkage-table-entries ()
+  "Called during reinit. Used to rewrite NULL function references to the
+correct undefined alien function handler."
+  (let* ((n-prelinked (extern-alien "lisp_linkage_table_n_prelinked" int))
+         (info *linkage-info*)
+         (ht (car info))
+         (notdef))
+    (with-system-mutex ((hash-table-lock ht))
+      (dohash ((key index) ht)
+        (when (< index n-prelinked)
+          (let* ((datap (listp key))
+                 (sap (alien-sap (arch-read-linkage-table-entry index (if datap 1 0)))))
+            (when (zerop (sap-int sap))
+              (push key notdef)
+              (arch-write-linkage-table-entry index
+                                              (if datap
+                                                  undefined-alien-address
+                                                  (or
+                                                   (sb-fasl:get-asm-routine 'sb-vm::undefined-alien-tramp)
+                                                   (find-foreign-symbol-address "undefined_alien_function")
+                                                   (bug "unreachable")))
+                                              (if datap 1 0)))))))
+    (setf (cdr info) notdef)))
+
 (defun linkage-table-index (name datap)
   "Returns the index of the foreign symbol in the linkage table or NIL if it is
 not present."
