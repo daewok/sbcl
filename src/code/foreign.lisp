@@ -60,7 +60,7 @@ if the symbol isn't found."
 (defun foreign-reinit ()
   (fixup-prelinked-linkage-table-entries)
   #+os-provides-dlopen (reopen-shared-objects)
-  (update-linkage-table t))
+  #+os-provides-dlopen (update-linkage-table t))
 
 ;;; Cleanups before saving a core
 (defun foreign-deinit ()

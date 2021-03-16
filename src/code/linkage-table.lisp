@@ -32,6 +32,7 @@
 
 (define-alien-variable undefined-alien-address unsigned)
 
+#+os-provides-dlopen
 (macrolet ((dlsym-wrapper (&optional warn)
              ;; Produce two values: an indicator of whether the foreign symbol was
              ;; found; and the address as an integer if found, or a guard address

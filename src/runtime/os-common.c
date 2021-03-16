@@ -213,7 +213,7 @@ void os_link_from_pointer_table(lispobj* table_ptr)
     }
 }
 
-#ifndef LISP_FEATURE_WIN32
+#if !defined(LISP_FEATURE_WIN32) && defined(LISP_FEATURE_OS_PROVIDES_DLOPEN)
 void *
 os_dlsym_default(char *name)
 {
