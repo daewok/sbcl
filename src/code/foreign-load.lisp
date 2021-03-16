@@ -144,8 +144,9 @@ Experimental."
 ;;; Open libraries in *SHARED-OBJECTS* and the runtime. Called during
 ;;; initialization.
 (defun reopen-shared-objects ()
-  ;; Ensure that the runtime is open
-  (setf *runtime-dlhandle* (dlopen-or-lose))
+  ;; Try to open the runtime. If we can't, errors will be produced later on
+  ;; when it's actually used.
+  (setf *runtime-dlhandle* (ignore-errors (dlopen-or-lose)))
   ;; Without this many symbols aren't accessible.
   #+android (load-shared-object "libc.so" :dont-save t)
   ;; Reopen stuff.

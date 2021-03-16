@@ -3534,7 +3534,7 @@ register."
   #+arm64 (error "Breakpoints do not work on ARM64")
   #-arm64
   (macrolet ((symbol-addr (name)
-               `(find-dynamic-foreign-symbol-address ,name))
+               `(find-foreign-symbol-address ,name))
              (trap-offset ()
                `(- (symbol-addr "fun_end_breakpoint_trap") src-start)))
     ;; These are really code labels, not variables: but this way we get
