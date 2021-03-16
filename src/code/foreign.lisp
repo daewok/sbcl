@@ -14,7 +14,10 @@
 (defun find-foreign-symbol-address (name)
   "Returns the address of the foreign symbol NAME, or NIL. Does not enter the
 symbol in the linkage table, and never returns an address in the linkage-table."
-  (find-dynamic-foreign-symbol-address name))
+  (or
+   #+os-provides-dlopen
+   (find-dynamic-foreign-symbol-address name)
+   (find-linkage-table-foreign-symbol-address name)))
 
 ;;; Note that much conditionalization is for nothing at this point, because all
 ;;; platforms that we care about implement dlopen(). But if one did not, only
@@ -32,7 +35,12 @@ Returns a secondary value T for historical reasons.
 The returned address is always a linkage-table address.
 Symbols are entered into the linkage-table if they aren't there already."
   (declare (ignorable datap))
-  (values (ensure-foreign-symbol-linkage name datap) t))
+  (values
+   (or (linkage-table-address name datap)
+       #+os-provides-dlopen
+       (ensure-foreign-symbol-linkage name datap)
+       (error 'undefined-alien-error :name name))
+   t))
 
 (defun foreign-symbol-sap (symbol &optional datap)
   "Returns a SAP corresponding to the foreign symbol. DATAP must be true if the
@@ -100,7 +108,7 @@ if the symbol isn't found."
         and reference across (symbol-value 'sb-vm::+required-foreign-symbols+)
         do (setf (gethash reference (car *linkage-info*)) table-offset))
   #+os-provides-dlopen
-  (setf *runtime-dlhandle* (dlopen-or-lose))
+  (setf *runtime-dlhandle* (ignore-errors (dlopen-or-lose)))
   #+os-provides-dlopen
   (setf *shared-objects* nil))
 
