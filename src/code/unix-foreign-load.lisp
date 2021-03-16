@@ -65,21 +65,15 @@
 
 (defun find-dynamic-foreign-symbol-address (symbol)
   (dlerror)                             ; clear old errors
-  (unless *runtime-dlhandle*
-    (bug "Cannot resolve foreign symbol: lost *runtime-dlhandle*"))
   ;; On real ELF & dlsym platforms the EXTERN-ALIEN-NAME is a no-op,
   ;; but on platforms where dlsym is simulated we use the mangled name.
-  (let* ((extern (extern-alien-name symbol))
-         (result (sap-int (dlsym *runtime-dlhandle* extern)))
-         (err (dlerror)))
-    (if (or (not (zerop result)) (not err))
+  (let ((extern (extern-alien-name symbol))
         result
-        (dolist (obj *shared-objects*)
-          (let ((sap (shared-object-handle obj)))
-            (when sap
-              (setf result (sap-int (dlsym sap extern))
-                    err (dlerror))
-              (when (or (not (zerop result)) (not err))
-                (return result))))))))
-
-
+        err)
+    (dolist (handle (cons *runtime-dlhandle*
+                          (mapcar #'shared-object-handle *shared-objects*)))
+      (when handle
+        (setf result (sap-int (dlsym handle extern))
+              err (dlerror))
+        (when (or (not (zerop result)) (not err))
+          (return result))))))
