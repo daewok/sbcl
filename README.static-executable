@@ -1,0 +1,250 @@
+This branch of SBCL is maintained by Eric Timmons (@daewok) and contains a set
+of patches necessary to build a completely static executable with SBCL. Such an
+executable has all necessary foreign libraries statically linked into the
+runtime and has no support for dynamic loading and unloading of
+libraries. While the lack of dynamic loading support is certainly constraining,
+the benefit of building an executable this way is it requires no libraries to
+be installed by the user of the executable. This makes it ideal for archival
+purposes, distributing executables to a non-technical audience, distributing an
+executable where you must know the exact versions of foreign libraries used at
+runtime, or distributing executables that Just Work^TM (like many executables
+written in golang).
+
+While other solutions exist to statically link foreign libraries into the SBCL
+runtime, to the best of my knowledge there has been no publicly advertised
+method of building SBCL with libc statically linked. The lack of static linking
+for libc means that the user of the executable must have a compatible libc
+installed. Unfortunately, the most commonly used libc in the Linux world
+(glibc) is frequently not backward compatible with itself. For evidence of
+this, see the fact that SBCLs built on Debian Buster (like the official
+releases since 1.5.6) do not run on Debian Stretch.
+
+Unfortunately, glibc doesn't even really support static linking at
+all. Therefore, I recommend that static SBCL executables be built with musl
+libc. Musl is designed with static linking in mind and is broadly compatible
+with most libraries that don't do tricksy things with libc. And if you find a
+library not compatible with musl libc, it seems most maintainers are welcoming
+to patches that add support.
+
+Alpine Linux is a great OS for building statically linked executables as it
+uses musl libc by default. I further recommend using Docker for building static
+executables so that you don't need to maintain a separate Alpine install. Plus,
+you can use the clfoundation/sbcl:alpine3.13 image as a starting point.
+
+THEORY
+
+The biggest issue with creating a static executable is ensuring that foreign
+symbols are accessible from the Lisp core. In normal, dynamic use, SBCL uses
+dlsym to look up the address of symbols and stores them in a vector in foreign
+memory called the "linkage table". The lisp core then maintains a hash table
+mapping foreign symbol names to their index in the linkage table. This is
+called the linkage info.
+
+In a static executable, we cannot count on having a working dlsym, even if
+libdl is linked into the runtime. When performing static linkage, musl libc
+replaces all libdl functions with stubs that simply return errors. Therefore,
+we have to use the system linker to resolve the references for us. But in order
+to have the linker do that for us, we need to know at link time which foreign
+symbols our lisp code will want to use!
+
+EXTRACTING LINKAGE INFO
+
+There are two approaches described below to generate a static executable. Both
+of them require a file describing the desired linkage info. While you could
+generate this by hand, it is easiest to extract it from a core.
+
+In order to extract the linkage info from a running core, use
+tools-for-build/dump-linkage-info.lisp. After loading that into the core,
+evaluate (sb-dump-linkage-info:dump-to-file #p"/path/to/output.sexp"). It also
+takes an keyword argument :make-undefined, a list of symbol names to make
+undefined in the output. This is useful for approach two below.
+
+The sexp written to the output file is a single list of lists. Each sublist has
+three elements. The first is a string naming the symbol. The second is T if the
+symbol is entered into the linkage info as data (it is a foreign variable) and
+NIL otherwise (it is a foreign function). The third is T if the symbol is
+undefined and NIL otherwise. It is critical that undefined symbols be
+maintained for approach one below.
+
+The following two sections describe two approaches on how to generate a static
+executable, step-by-step. The demo static executable contains the sb-gmp
+contrib and runs its test quite when executed. It requires that the static
+libraries for libgmp and libz are installed on your system. There is some
+weirdness with how the tests are loaded. This is because the tests do not seem
+to work after being dumped: I have not yet figured out why this is.
+
+BUILDING A STATIC EXECUTABLE - APPROACH ONE
+
+This approach to building a static executable is preferred if you're you want
+to minimize the amount of time compiling C and Lisp code. It takes advantage of
+the fact that musl inserts stub functionality for libdl such that it can still
+be linked against.
+
+The general process for this approach is:
+
+0. Build SBCL with the :sb-prelink-linkage-table feature (:sb-linkable-runtime
+is also strongly recommended).
+
+1. Build a core containing the lisp code you want to package in the static
+executable.
+
+2. Dump the linkage info to a file.
+
+3. Dump the core to a file (with save-lisp-and-die).
+
+4. Generate a C file that contains the info needed to build the linkage table.
+
+5. Relink the runtime. This time statically *and* with the object file
+generated from the C file in step 4.
+
+6. Load the saved core into the new static runtime, dumping again with
+:executable t if desired.
+
+Some notes about this approach:
+
++ The build IDs of the dynamic runtime (used to generate the core in step 1)
+and the static runtime *must* match. The easiest way to achieve this is to
+install SBCL with the feature :sb-linkable-runtime. This installs sbcl.o (the
+SBCL runtime in a ingle object file) along with everything else.
+
++ No modifications must be made to the linkage info file generated in step 2
+and no symbols can be filtered out of it.
+
+Here is a step-by-step procedure to build the demo static executable using this
+approach.
+
+Step 0:
+
+    sh make.sh --fancy --with-sb-linkable-runtime --with-sb-prelink-linkage-table
+    sh install.sh
+
+Steps 1-3:
+
+    sbcl --non-interactive \
+         --no-sysinit --no-userinit \
+         --eval '(require :uiop)' \
+         --eval '(require :sb-gmp)' \
+         --eval '(require :sb-rt)' \
+         --eval '(defvar *sb-gmp-tests* (uiop:read-file-string "contrib/sb-gmp/tests.lisp"))' \
+         --load tools-for-build/dump-linkage-info.lisp \
+         --eval '(sb-dump-linkage-info:dump-to-file "/tmp/linkage-info.sexp")' \
+         --eval '(sb-ext:save-lisp-and-die "/tmp/sb-gmp-tester.core")'
+
+Step 4:
+
+    sbcl --no-sysinit --no-userinit \
+         --script tools-for-build/create-linkage-table-prelink-info-override.lisp \
+         /tmp/linkage-info.sexp \
+         /tmp/linkage-table-prelink-info-override.c
+
+Step 5:
+
+    # Get all the variables SBCL used to build defined in the current environment.
+    while read l; do
+      eval "${l%%=*}=\"${l#*=}\"";
+    done < /usr/local/lib/sbcl/sbcl.mk
+    
+    $CC $CFLAGS -Wno-builtin-declaration-mismatch -o /tmp/linkage-table-prelink-info-override.o -c /tmp/linkage-table-prelink-info-override.c
+    $CC -no-pie -static $LINKFLAGS -o /tmp/static-sbcl /usr/local/lib/sbcl/$LIBSBCL /tmp/linkage-table-prelink-info-override.o -lgmp $LIBS
+
+Step 6:
+
+    /tmp/static-sbcl --core /tmp/sb-gmp-tester.core \
+                     --non-interactive \
+                     --no-sysinit --no-userinit \
+                     --eval '(sb-ext:save-lisp-and-die "/tmp/sb-gmp-tester" :executable t :toplevel (lambda () (uiop:load-from-string *sb-gmp-tests*) (sb-rt:do-tests) (exit)) :compression t)'
+
+
+Look at the dumped executable. You should see that it is a static executable.
+
+    ldd /tmp/sb-gmp-tester
+
+Test that it works!
+
+    /tmp/sb-gmp-tester
+    
+BUILDING A STATIC EXECUTABLE - APPROACH TWO
+
+This approach results in an executable that is not linked with libdl at
+all. This makes it a little bit more "pure" than than the previous approach,
+but that comes at the cost of needing to fully recompile both the runtime and
+core after the necessary foreign symbols are determined.
+
+The general process for this approach is:
+
+1. Build a core containing the lisp code you want to package in the static
+executable.
+
+2. Dump the linkage info to a file.
+
+3. Recompile SBCL, passing in the linkage info during build.
+
+4. Rebuild your core with the new runtime and corresponding core.
+
+5. Dump with :executable t.
+
+Some notes about this approach:
+
++ The libdl symbols must be stripped out of the linkage info file generated in
+step 2. The easiest way to do this is pass sb-dump-linkage-info:*libdl-symbols*
+as the :make-undefined argument to dump-to-file.
+
++ Further modifications can be made to the linkage info file generated in step
+2. You can reorder the symbols at will. You can add new symbols. You probably
+don't want to remove any (besides libdl functions).
+
+Steps 1-2:
+
+    sh run-sbcl.sh --non-interactive \
+                   --no-sysinit --no-userinit \
+                   --eval '(require :uiop)' \
+                   --eval '(require :sb-gmp)' \
+                   --eval '(require :sb-rt)' \
+                   --eval '(defvar *sb-gmp-tests* (uiop:read-file-string "contrib/sb-gmp/tests.lisp"))' \
+                   --load tools-for-build/dump-linkage-info.lisp \
+                   --eval '(sb-dump-linkage-info:dump-to-file "/tmp/linkage-info.sexp" :remove-symbols sb-dump-linkage-info:*libdl-symbols*)'
+
+Step 3:
+
+    LDLIBS="-lgmp" LINKFLAGS="-no-pie -static" IGNORE_CONTRIB_FAILURES="yes" sh make.sh --extra-linkage-table-entries=/tmp/linkage-info.sexp --without-os-provides-dlopen --without-os-provides-dladdr --fancy
+
+Steps 4-5:
+
+    sh run-sbcl.sh --non-interactive \
+                   --no-sysinit --no-userinit \
+                   --eval '(require :uiop)' \
+                   --eval '(require :sb-gmp)' \
+                   --eval '(require :sb-rt)' \
+                   --eval '(defvar *sb-gmp-tests* (uiop:read-file-string "contrib/sb-gmp/tests.lisp"))' \
+                   --eval '(sb-ext:save-lisp-and-die "/tmp/sb-gmp-tester" :executable t :toplevel (lambda () (uiop:load-from-string *sb-gmp-tests*) (sb-rt:do-tests) (exit)) :compression t)'
+
+Look at the dumped executable. You should see that it is a static executable.
+
+    ldd /tmp/sb-gmp-tester
+
+Test that it works!
+
+    /tmp/sb-gmp-tester
+
+BUILDING A STATIC EXECUTABLE WITH DOCKER
+
+See the Dockerfile at tools-for-build/Dockerfile.static-executable-example for
+an example of how to build the demo executable using Docker and approach
+one. The benefit of Docker is that it is a cheap way to build with musl libc
+even if you use glibc locally.
+
+The following commands will build the demo executable inside docker and extract
+it from the image, placing it at /tmp/sb-gmp-tester on your local file
+system. The following commands also try to avoid polluting your Docker
+namespace by not tagging the image or naming the container used to extract the
+executable.
+
+    IMAGE_ID_FILE="$(mktemp)"
+    CONTAINER_ID_FILE="$(mktemp)"
+    rm "$CONTAINER_ID_FILE"
+    docker build --iidfile "$IMAGE_ID_FILE" -f tools-for-build/Dockerfile.static-executable-example .
+    docker create --cidfile "$CONTAINER_ID_FILE" "$(cat "$IMAGE_ID_FILE")"
+    docker cp "$(cat "$CONTAINER_ID_FILE"):/tmp/sb-gmp-tester" /tmp/sb-gmp-tester
+    docker rm "$(cat "$CONTAINER_ID_FILE")"
+    rm "$IMAGE_ID_FILE"
+    rm "$CONTAINER_ID_FILE"
