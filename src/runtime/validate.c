@@ -144,9 +144,7 @@ allocate_lisp_dynamic_space(boolean did_preinit)
     if (!did_preinit)
       allocate_hardwired_spaces(1);
 
-#ifdef LISP_FEATURE_OS_PROVIDES_DLOPEN
     ensure_undefined_alien();
-#endif
 }
 
 static inline void
