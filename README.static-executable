@@ -105,7 +105,7 @@ Some notes about this approach:
 + The build IDs of the dynamic runtime (used to generate the core in step 1)
 and the static runtime *must* match. The easiest way to achieve this is to
 install SBCL with the feature :sb-linkable-runtime. This installs sbcl.o (the
-SBCL runtime in a ingle object file) along with everything else.
+SBCL runtime in a single object file) along with everything else.
 
 + No modifications must be made to the linkage info file generated in step 2
 and no symbols can be filtered out of it.
